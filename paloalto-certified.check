@@ -73,7 +73,7 @@ def expirationCertified(dbserial):
 
 # Script execution with arguments
 if arguments == 'discoveryCertified':
-    print(discoveryCertificate())
+    print(discoveryCertified())
 elif arguments == 'expirationCertified':
     cert_serial = sys.argv[5]
     print(expirationCertified(cert_serial))
