@@ -76,6 +76,6 @@ if arguments == 'discoveryCertified':
 elif arguments == 'expirationCertified':
     cert_serial = sys.argv[5]
     if 6 in sys.argv:
-        print(expirationCertified(cert_serial, sys.argv[6])
+        print(expirationCertified(cert_serial, sys.argv[6]))
     else:
         print(expirationCertified(cert_serial))
