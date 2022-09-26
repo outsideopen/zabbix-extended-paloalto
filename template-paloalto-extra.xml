@@ -43,7 +43,7 @@
                         <item_prototype>
                             <name>{#DBNAME}</name>
                             <type>EXTERNAL</type>
-                            <key>paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#DBNAME}]</key>
+                            <key>paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH}]</key>
                             <delay>1h</delay>
                             <units>unixtime</units>
                             <applications>
@@ -64,7 +64,7 @@
                                     <dependencies>
                                         <dependency>
                                             <name>{#DBNAME} expired</name>
-                                            <expression>{Template Palo Alto Extra:paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#DBNAME}].last()}&lt;=3600</expression>
+                                            <expression>{Template Palo Alto Extra:paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH}].last()}&lt;=3600</expression>
                                         </dependency>
                                     </dependencies>
                                 </trigger_prototype>
@@ -75,7 +75,7 @@
                                     <dependencies>
                                         <dependency>
                                             <name>{#DBNAME} expires in less than 7 days</name>
-                                            <expression>{Template Palo Alto Extra:paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#DBNAME}].last()}&lt;=604800</expression>
+                                            <expression>{Template Palo Alto Extra:paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH}].last()}&lt;=604800</expression>
                                         </dependency>
                                     </dependencies>
                                 </trigger_prototype>
@@ -86,7 +86,7 @@
                                     <dependencies>
                                         <dependency>
                                             <name>{#DBNAME} expires in less than 45 days</name>
-                                            <expression>{Template Palo Alto Extra:paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#DBNAME}].last()}&lt;=3888000</expression>
+                                            <expression>{Template Palo Alto Extra:paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH}].last()}&lt;=3888000</expression>
                                         </dependency>
                                     </dependencies>
                                 </trigger_prototype>
