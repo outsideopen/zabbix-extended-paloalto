@@ -66,7 +66,7 @@ def expirationCertified(dbhash, dbserial=None):
     lista = discoveryCertified()
     d1_json = json.loads(lista)
     for i in d1_json['data']:
-        if dbhash == i['{#DBHASH}'] and (not dbserial or (dbserial and dbserial == i['{#DBSERIAL}'])):
+        if dbhash == i['{#HASH}'] and (not dbserial or (dbserial and dbserial == i['{#DBSERIAL}'])):
             return i['{#DBEXPDATE}']
 
 
