@@ -39,11 +39,12 @@
                     <type>EXTERNAL</type>
                     <key>paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},discoveryCertified]</key>
                     <delay>1h</delay>
+                    <lifetime>2d</lifetime>
                     <item_prototypes>
                         <item_prototype>
                             <name>{#DBNAME}</name>
                             <type>EXTERNAL</type>
-                            <key>paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH}]</key>
+                            <key>paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH},{#DBSERIAL}]</key>
                             <delay>1h</delay>
                             <units>unixtime</units>
                             <applications>
@@ -53,40 +54,40 @@
                             </applications>
                             <trigger_prototypes>
                                 <trigger_prototype>
-                                    <expression>{last()}&lt;=3600</expression>
+                                    <expression>{last()-now()}&lt;=3600</expression>
                                     <name>{#DBNAME} expired</name>
                                     <priority>DISASTER</priority>
                                 </trigger_prototype>
                                 <trigger_prototype>
-                                    <expression>{last()}&lt;=604800</expression>
+                                    <expression>{last()-now()}&lt;=604800</expression>
                                     <name>{#DBNAME} expires in less than 7 days</name>
                                     <priority>HIGH</priority>
                                     <dependencies>
                                         <dependency>
                                             <name>{#DBNAME} expired</name>
-                                            <expression>{Template Palo Alto Extra:paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH}].last()}&lt;=3600</expression>
+                                            <expression>{Template Palo Alto Extra:paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH},{#DBSERIAL}].last()}&lt;=3600</expression>
                                         </dependency>
                                     </dependencies>
                                 </trigger_prototype>
                                 <trigger_prototype>
-                                    <expression>{last()}&lt;=3888000</expression>
+                                    <expression>{last()-now()}&lt;=3888000</expression>
                                     <name>{#DBNAME} expires in less than 45 days</name>
                                     <priority>AVERAGE</priority>
                                     <dependencies>
                                         <dependency>
                                             <name>{#DBNAME} expires in less than 7 days</name>
-                                            <expression>{Template Palo Alto Extra:paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH}].last()}&lt;=604800</expression>
+                                            <expression>{Template Palo Alto Extra:paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH},{#DBSERIAL}].last()}&lt;=604800</expression>
                                         </dependency>
                                     </dependencies>
                                 </trigger_prototype>
                                 <trigger_prototype>
-                                    <expression>{last()}&lt;=7776000</expression>
+                                    <expression>{last()-now()}&lt;=7776000</expression>
                                     <name>{#DBNAME} expires in less than 90 days</name>
                                     <priority>WARNING</priority>
                                     <dependencies>
                                         <dependency>
                                             <name>{#DBNAME} expires in less than 45 days</name>
-                                            <expression>{Template Palo Alto Extra:paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH}].last()}&lt;=3888000</expression>
+                                            <expression>{Template Palo Alto Extra:paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH},{#DBSERIAL}].last()}&lt;=3888000</expression>
                                         </dependency>
                                     </dependencies>
                                 </trigger_prototype>
@@ -105,6 +106,7 @@
                     <type>EXTERNAL</type>
                     <key>paloalto-ipsec.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},discovery_vpn]</key>
                     <delay>5m</delay>
+                    <lifetime>0</lifetime>
                     <item_prototypes>
                         <item_prototype>
                             <name>{#NAME}</name>
@@ -134,6 +136,7 @@
                     <name>paloalto.licenses</name>
                     <type>EXTERNAL</type>
                     <key>paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},discoveryLicensesOperations]</key>
+                    <lifetime>0</lifetime>
                     <item_prototypes>
                         <item_prototype>
                             <name>{#NAME} ({#SERIAL})</name>
@@ -153,7 +156,7 @@
                                     <priority>DISASTER</priority>
                                 </trigger_prototype>
                                 <trigger_prototype>
-                                    <expression>{last(#1)}&lt;=604800</expression>
+                                    <expression>{last(#1)-now()}&lt;=604800</expression>
                                     <name>{#NAME} expires in 7 days</name>
                                     <priority>HIGH</priority>
                                     <dependencies>
@@ -164,7 +167,7 @@
                                     </dependencies>
                                 </trigger_prototype>
                                 <trigger_prototype>
-                                    <expression>{last(#1)}&lt;=3888000</expression>
+                                    <expression>{last(#1)-now()}&lt;=3888000</expression>
                                     <name>{#NAME} expires in 45 days</name>
                                     <priority>AVERAGE</priority>
                                     <dependencies>
@@ -175,7 +178,7 @@
                                     </dependencies>
                                 </trigger_prototype>
                                 <trigger_prototype>
-                                    <expression>{last(#1)}&lt;=7776000</expression>
+                                    <expression>{last(#1)-now()}&lt;=7776000</expression>
                                     <name>{#NAME} expires in 90 days</name>
                                     <priority>WARNING</priority>
                                     <dependencies>
@@ -200,6 +203,7 @@
                     <type>EXTERNAL</type>
                     <key>paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},discoveryLicenseSupport]</key>
                     <delay>1h</delay>
+                    <lifetime>0</lifetime>
                     <item_prototypes>
                         <item_prototype>
                             <name>{#NAME} ({#SUPPORTLEVEL})</name>
@@ -213,12 +217,12 @@
                             </applications>
                             <trigger_prototypes>
                                 <trigger_prototype>
-                                    <expression>{last(#1)}&lt;=3600</expression>
+                                    <expression>{last(#1)-now()}&lt;=3600</expression>
                                     <name>{#NAME} expired</name>
                                     <priority>DISASTER</priority>
                                 </trigger_prototype>
                                 <trigger_prototype>
-                                    <expression>{last(#1)}&lt;=604800</expression>
+                                    <expression>{last(#1)-now()}&lt;=604800</expression>
                                     <name>{#NAME} expires in 7 days</name>
                                     <priority>HIGH</priority>
                                     <dependencies>
@@ -229,7 +233,7 @@
                                     </dependencies>
                                 </trigger_prototype>
                                 <trigger_prototype>
-                                    <expression>{last(#1)}&lt;=3888000</expression>
+                                    <expression>{last(#1)-now()}&lt;=3888000</expression>
                                     <name>{#NAME} expires in 45 days</name>
                                     <priority>AVERAGE</priority>
                                     <dependencies>
@@ -240,7 +244,7 @@
                                     </dependencies>
                                 </trigger_prototype>
                                 <trigger_prototype>
-                                    <expression>{last(#1)}&lt;=7776000</expression>
+                                    <expression>{last(#1)-now()}&lt;=7776000</expression>
                                     <name>{#NAME} expires in 90 days</name>
                                     <priority>WARNING</priority>
                                     <dependencies>
@@ -273,6 +277,10 @@
         <value_map>
             <name>PaloAlto VPN Status</name>
             <mappings>
+                <mapping>
+                    <value>-1</value>
+                    <newvalue>Unknown</newvalue>
+                </mapping>
                 <mapping>
                     <value>0</value>
                     <newvalue>Inactive</newvalue>

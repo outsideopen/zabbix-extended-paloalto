@@ -1,0 +1,238 @@
+zabbix_export:
+  version: '6.0'
+  date: '2023-01-06T18:32:25Z'
+  groups:
+    -
+      uuid: 9f694f29404e45e8aba546481eafbf41
+      name: PaloAlto
+    -
+      uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates
+  templates:
+    -
+      uuid: 66c7fbd372a7464192181f7424a691f9
+      template: 'Template Palo Alto Extra'
+      name: 'Template Palo Alto Extra'
+      groups:
+        -
+          name: PaloAlto
+        -
+          name: Templates
+      discovery_rules:
+        -
+          uuid: c8f08d052e744b72ad4926e20746e203
+          name: paloalto.certs
+          type: EXTERNAL
+          key: 'paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},discoveryCertified]'
+          delay: 1h
+          lifetime: 2d
+          item_prototypes:
+            -
+              uuid: 31226fbf65734ce7a3c20ef335b395c9
+              name: '{#DBNAME}'
+              type: EXTERNAL
+              key: 'paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH},{#DBSERIAL}]'
+              delay: 1h
+              units: unixtime
+              tags:
+                -
+                  tag: Application
+                  value: Certificate
+              trigger_prototypes:
+                -
+                  uuid: dfcf40bd707a40eaa8a026efff62b89c
+                  expression: 'last(/Template Palo Alto Extra/paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH},{#DBSERIAL}])-now()<=3600'
+                  name: '{#DBNAME} expired'
+                  priority: DISASTER
+                -
+                  uuid: cc83bbd38620442285b9ba311f80d794
+                  expression: 'last(/Template Palo Alto Extra/paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH},{#DBSERIAL}])-now()<=604800'
+                  name: '{#DBNAME} expires in less than 7 days'
+                  priority: HIGH
+                  dependencies:
+                    -
+                      name: '{#DBNAME} expired'
+                      expression: 'last(/Template Palo Alto Extra/paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH},{#DBSERIAL}])-now()<=3600'
+                -
+                  uuid: 2df561cee7894bcdb3ba6e5f68bd6b70
+                  expression: 'last(/Template Palo Alto Extra/paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH},{#DBSERIAL}])-now()<=3888000'
+                  name: '{#DBNAME} expires in less than 45 days'
+                  priority: AVERAGE
+                  dependencies:
+                    -
+                      name: '{#DBNAME} expires in less than 7 days'
+                      expression: 'last(/Template Palo Alto Extra/paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH},{#DBSERIAL}])-now()<=604800'
+                -
+                  uuid: 86f810f816eb4eed940a56b5f699f1e6
+                  expression: 'last(/Template Palo Alto Extra/paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH},{#DBSERIAL}])-now()<=7776000'
+                  name: '{#DBNAME} expires in less than 90 days'
+                  priority: WARNING
+                  dependencies:
+                    -
+                      name: '{#DBNAME} expires in less than 45 days'
+                      expression: 'last(/Template Palo Alto Extra/paloalto-certified.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationCertified,{#HASH},{#DBSERIAL}])-now()<=3888000'
+          preprocessing:
+            -
+              type: JSONPATH
+              parameters:
+                - $.data
+        -
+          uuid: 83ba70ef40644ed7a91dd6d74abf9e0a
+          name: paloalto.ipsec
+          type: EXTERNAL
+          key: 'paloalto-ipsec.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},discovery_vpn]'
+          delay: 5m
+          lifetime: 2d
+          item_prototypes:
+            -
+              uuid: f7ca023e89c841fdace228a8ea9208db
+              name: '{#NAME}'
+              type: EXTERNAL
+              key: 'paloalto-ipsec.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},status_vpn,{#NAME}]'
+              delay: 5m
+              trends: '0'
+              value_type: CHAR
+              valuemap:
+                name: 'PaloAlto VPN Status'
+              tags:
+                -
+                  tag: Application
+                  value: VPN
+          preprocessing:
+            -
+              type: JSONPATH
+              parameters:
+                - $.data
+        -
+          uuid: 45d898e22ab647c98fbe444c50fa7ae5
+          name: paloalto.licenses
+          type: EXTERNAL
+          key: 'paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},discoveryLicensesOperations]'
+          lifetime: 2d
+          item_prototypes:
+            -
+              uuid: 123c2afa2a2a4b34ae0a37493ed2e60f
+              name: '{#NAME} ({#SERIAL})'
+              type: EXTERNAL
+              key: 'paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationLicensesOperations,{#NAME}]'
+              delay: 1h
+              units: unixtime
+              tags:
+                -
+                  tag: Application
+                  value: License
+              trigger_prototypes:
+                -
+                  uuid: 3cf280da1b604fb68e39ad2f85046277
+                  expression: 'last(/Template Palo Alto Extra/paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationLicensesOperations,{#NAME}],#1)-now()<=3600'
+                  name: '{#NAME} expired'
+                  priority: DISASTER
+                -
+                  uuid: 66fe94257918469caa91f5f9008b60b7
+                  expression: 'last(/Template Palo Alto Extra/paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationLicensesOperations,{#NAME}],#1)-now()<=604800'
+                  name: '{#NAME} expires in 7 days'
+                  priority: HIGH
+                  dependencies:
+                    -
+                      name: '{#NAME} expired'
+                      expression: 'last(/Template Palo Alto Extra/paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationLicensesOperations,{#NAME}],#1)-now()<=3600'
+                -
+                  uuid: c0e894390ea54252aed5dfb008195b3c
+                  expression: 'last(/Template Palo Alto Extra/paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationLicensesOperations,{#NAME}],#1)-now()<=3888000'
+                  name: '{#NAME} expires in 45 days'
+                  priority: AVERAGE
+                  dependencies:
+                    -
+                      name: '{#NAME} expires in 7 days'
+                      expression: 'last(/Template Palo Alto Extra/paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationLicensesOperations,{#NAME}],#1)-now()<=604800'
+                -
+                  uuid: a42f7a5cd9b24e2d830e824e8331e939
+                  expression: 'last(/Template Palo Alto Extra/paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationLicensesOperations,{#NAME}],#1)-now()<=7776000'
+                  name: '{#NAME} expires in 90 days'
+                  priority: WARNING
+                  dependencies:
+                    -
+                      name: '{#NAME} expires in 45 days'
+                      expression: 'last(/Template Palo Alto Extra/paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationLicensesOperations,{#NAME}],#1)-now()<=3888000'
+          preprocessing:
+            -
+              type: JSONPATH
+              parameters:
+                - $.data
+        -
+          uuid: 3c77d71a12b745898cd16107d40aedbe
+          name: paloalto.support
+          type: EXTERNAL
+          key: 'paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},discoveryLicenseSupport]'
+          delay: 1h
+          lifetime: 2d
+          item_prototypes:
+            -
+              uuid: d9db9dbf87214a6c9f8020650beac592
+              name: '{#NAME} ({#SUPPORTLEVEL})'
+              type: EXTERNAL
+              key: 'paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationLicenseSupport,{#NAME}]'
+              units: unixtime
+              tags:
+                -
+                  tag: Application
+                  value: License
+              trigger_prototypes:
+                -
+                  uuid: 67aee92e948a41a8b48ae94c1dca2205
+                  expression: 'last(/Template Palo Alto Extra/paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationLicenseSupport,{#NAME}],#1)-now()<=3600'
+                  name: '{#NAME} expired'
+                  priority: DISASTER
+                -
+                  uuid: 2043b67855a94c44a3ba2463cc77cddf
+                  expression: 'last(/Template Palo Alto Extra/paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationLicenseSupport,{#NAME}],#1)-now()<=604800'
+                  name: '{#NAME} expires in 7 days'
+                  priority: HIGH
+                  dependencies:
+                    -
+                      name: '{#NAME} expired'
+                      expression: 'last(/Template Palo Alto Extra/paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationLicenseSupport,{#NAME}],#1)-now()<=3600'
+                -
+                  uuid: 2c878542255a4ab28d79f15f6b6bcea9
+                  expression: 'last(/Template Palo Alto Extra/paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationLicenseSupport,{#NAME}],#1)-now()<=3888000'
+                  name: '{#NAME} expires in 45 days'
+                  priority: AVERAGE
+                  dependencies:
+                    -
+                      name: '{#NAME} expires in 7 days'
+                      expression: 'last(/Template Palo Alto Extra/paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationLicenseSupport,{#NAME}],#1)-now()<=604800'
+                -
+                  uuid: 35ad3a2ce61f4f51a5665e4fe3c36121
+                  expression: 'last(/Template Palo Alto Extra/paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationLicenseSupport,{#NAME}],#1)-now()<=7776000'
+                  name: '{#NAME} expires in 90 days'
+                  priority: WARNING
+                  dependencies:
+                    -
+                      name: '{#NAME} expires in 45 days'
+                      expression: 'last(/Template Palo Alto Extra/paloalto-license.check[{HOST.CONN},443,{$PALOALTO_API_TOKEN},expirationLicenseSupport,{#NAME}],#1)-now()<=3888000'
+          preprocessing:
+            -
+              type: JSONPATH
+              parameters:
+                - $.data
+      macros:
+        -
+          macro: '{$PALOALTO_API_TOKEN}'
+          description: 'Token for the PA APi'
+      valuemaps:
+        -
+          uuid: 366c110996284ebc8f3043e3511d3d60
+          name: 'PaloAlto VPN Status'
+          mappings:
+            -
+              value: '-1'
+              newvalue: 'Unknown'
+            -
+              value: '0'
+              newvalue: Inactive
+            -
+              value: '1'
+              newvalue: Active
+            -
+              value: '2'
+              newvalue: Initializing

@@ -1,0 +1,13 @@
+[FORMAT]
+max-line-length=120
+
+[MESSAGES CONTROL]
+disable=fixme,
+        missing-module-docstring,
+        redefined-outer-name,
+        duplicate-code,
+        too-many-arguments,
+        invalid-name
+
+[REPORTS]
+output-format = colorized

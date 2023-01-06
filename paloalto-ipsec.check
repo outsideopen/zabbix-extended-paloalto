@@ -1,83 +1,97 @@
 #!/usr/bin/env python3
 #
-# Autor: Danielle dos Reis
-# Date: 13/05/2020
-# Version: v1
+# Author: Danielle dos Reis
+# Author: David Lundgren
 
 import json
-import re
-import requests
-import socket
+import platform
+import tempfile
 import sys
+from pathlib import Path
+from urllib.parse import quote
+
+import requests
 import urllib3
-import xmltodict
+import xmltodict # pylint: disable=import-error
 
 # Remove warnings
 urllib3.disable_warnings()
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Connection
-ip_pa = sys.argv[1]
-port = sys.argv[2]
-
-# URL
-key = sys.argv[3]
-api = '&cmd=%3Cshow%3E%3Cvpn%3E%3Cflow%3E%3C%2Fflow%3E%3C%2Fvpn%3E%3C%2Fshow%3E'
-url = 'https://{}:{}/api/?type=op&cmd=show&key={}{}'.format(ip_pa, port, key, api)
-
-# Telnet 443
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.settimeout(3)
-result_https = sock.connect_ex((ip_pa, int(port)))
-
-if result_https != 0:
-    sys.exit()
-
-arguments = sys.argv[4]
+STATUS_MAP = {
+    'active': 1,
+    'inactive': 0
+}
 
 
-# Discovery VPN
-def discovery_vpn():
-    r = requests.get(url, verify=False)
-    dados = dict(xmltodict.parse(r.text))
-    lista = dados['response']['result']['IPSec']['entry']
-    result_json = []
+def load_ipsec(url, port, key, check_cache=True):
+    """Loads the ipsec data from a cached file not older than 15minutes or from the PA API"""
+    # check the cached file first
+    cache_file = Path("/tmp" if platform.system() == "Darwin" else tempfile.gettempdir()) / 'paloalto-ipsec.json'
+    if check_cache:
+        try:
+            with open(cache_file, 'r', encoding='UTF-8') as file:
+                return json.loads(file.read())
+        except OSError:
+            # doesn't exist yet, we'll create it later
+            pass
 
-    for i in lista:
-        lista = {
-            '{#NAME}': i['name'],
-            '{#PEERIP}': i['peerip'],
-            '{#TUNNEL}': i['inner-if'],
-            '{#STATUS}': i['state'],
-            '{#MON}': i['mon']
-        }
-        result_json.append(lista)
+    # URL
+    cmd = quote('<show><vpn><flow></flow></vpn></show>')
+    response = requests.get(
+        f'https://{url}:{port}/api/?type=op&cmd=show&key={key}&cmd={cmd}',
+        verify=False,
+        timeout=10
+    )
 
-    return json.dumps({'data': result_json}, indent=4)
+    results = dict(xmltodict.parse(response.text))['response']['result']
+    if results['total']:
+        # do not cache emptiness
+        return {}
+
+    results = results['IPSec']['entry'].split('\n\n')
+    ipsec = []
+
+    for connection in results:
+        ipsec.append({
+            '{#NAME}': connection['name'],
+            '{#PEERIP}': connection['peerip'],
+            '{#TUNNEL}': connection['inner-if'],
+            '{#STATUS}': connection['state'],
+            '{#MON}': connection['mon']
+        })
+
+    with open(cache_file, 'w', encoding='UTF-8') as file:
+        file.write(json.dumps(ipsec))
+
+    return ipsec
 
 
-# State VPN
-def status_vpn(vpn_name):
-    lista = discovery_vpn()
-    d1_json = json.loads(lista)
-
-    for i in d1_json['data']:
-
-        if vpn_name == i['{#NAME}']:
-            status = i['{#STATUS}']
-
-            if 'active' == status:
-                return 1
-            elif 'inactive' == status:
-                return 0
-            else:
-                return 2
+def resolve_tunnel_status(ipsec, name):
+    """Resolve the tunnel status based on the name"""
+    for tunnel in ipsec:
+        if name == tunnel['{#NAME}']:
+            return STATUS_MAP[tunnel['{#STATUS}']] if tunnel['{#STATUS}'] in STATUS_MAP else 2
+    return -1
 
 
-# Script execution with arguments
-if arguments == 'discovery_vpn':
-    print(discovery_vpn())
+def main():
+    """Runs the ipsec check"""
+    results = None
+    if sys.argv[4] in ('discovery_vpn', 'discover'):
+        results = {'data': load_ipsec(sys.argv[1], sys.argv[2], sys.argv[3], check_cache=False)}
 
-elif arguments == 'status_vpn':
-    vpn_name = sys.argv[5]
-    print(status_vpn(vpn_name))
+    if sys.argv[4] in ('status_vpn', 'status'):
+        results = resolve_tunnel_status(
+            load_ipsec(sys.argv[1], sys.argv[2], sys.argv[3]),
+            sys.argv[5]
+        )
+    return results
+
+
+if __name__ == '__main__':
+    try:
+        print(json.dumps(main(), indent=4))
+    except requests.exceptions.ConnectTimeout:
+        print(f"Timeout connecting to {sys.argv[1]}:{sys.argv[2]}")
+        sys.exit(1)

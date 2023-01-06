@@ -1,109 +1,125 @@
 #!/usr/bin/env python3
 #
-# Autor: Danielle dos Reis
-# Date: 15/05/2020
-# Version: v1
+# Author: Danielle dos Reis
+# Author: David Lundgren
 
 import json
-import requests
-import socket
+import platform
+import tempfile
 import sys
-import urllib3
-import xmltodict
 from datetime import datetime
+from pathlib import Path
+from urllib.parse import quote
+
+import requests
+import urllib3
+import xmltodict # pylint: disable=import-error
 
 # Remove warnings
 urllib3.disable_warnings()
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Connection
-ip_pa = sys.argv[1]
-port = sys.argv[2]
 
-# URL
-key = sys.argv[3]
-api_license_operations = '&cmd=%3Crequest%3E%3Clicense%3E%3Cinfo%3E%3C%2Finfo%3E%3C%2Flicense%3E%3C%2Frequest%3E'
-api_license_support = '&cmd=%3Crequest%3E%3Csupport%3E%3Cinfo%3E%3C%2Finfo%3E%3C%2Fsupport%3E%3C%2Frequest%3E'
-url_operations = 'https://{}:{}/api/?type=op&cmd=show&key={}{}'.format(ip_pa, port, key, api_license_operations)
-url_support = 'https://{}:{}/api/?type=op&cmd=show&key={}{}'.format(ip_pa, port, key, api_license_support)
+def load_from_pa(name, url, port, key, check_cache, cmd):
+    """Loads the requested data from the cached file or from the PA API if > 15m"""
+    # check the cached file first
+    cache_file = Path("/tmp" if platform.system() == "Darwin" else tempfile.gettempdir()) / f'paloalto-{name}.json'
+    if check_cache:
+        try:
+            with open(cache_file, 'r', encoding='UTF-8') as file:
+                return json.loads(file.read())
+        except OSError:
+            # doesn't exist yet, we'll create it later
+            pass
 
-# Telnet 443
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.settimeout(5)
-result_https = sock.connect_ex((ip_pa, int(port)))
+    response = requests.get(
+        f'https://{url}:{port}/api/?type=op&cmd=show&key={key}&cmd={quote(cmd)}',
+        verify=False,
+        timeout=10
+    )
 
-if result_https != 0:
-    sys.exit()
+    result = dict(xmltodict.parse(response.text))['response']['result']
+    with open(cache_file, 'w', encoding='UTF-8') as file:
+        file.write(json.dumps(result))
 
-arguments = sys.argv[4]
-
-# Discovery Licenses Operations
-def discoveryLicensesOperations():
-    r = requests.get(url_operations, verify=False)
-    dados = dict(xmltodict.parse(r.text))
-    lista = dados['response']['result']['licenses']['entry']
-    result_json = []
-
-    for i in lista:
-        if not i['expires'] == 'Never':
-            lista = {
-                '{#NAME}': i['feature'],
-                '{#SERIAL}': i['serial'],
-                '{#ISSUED}': i['issued'],
-                '{#EXPIRES}': int(datetime.strptime(i['expires'], '%B %d, %Y').timestamp()),
-                '{#EXPIRED}': i['expired']
-            }
-            result_json.append(lista)
-
-    return json.dumps({'data': result_json}, indent=4)
+    return result
 
 
-# Discovery License Support
-def discoveryLicenseSupport():
-    r = requests.get(url_support, verify=False)
-    dados = dict(xmltodict.parse(r.text))
-    expirydate = dados['response']['result']['SupportInfoResponse']['Support']['ExpiryDate']
-    supportlevel = dados['response']['result']['SupportInfoResponse']['Support']['SupportLevel']
-    result_json = []
+def load_support(url, port, key, check_cache=True):
+    """Loads the support data"""
+    results = load_from_pa('support',
+                           url,
+                           port,
+                           key,
+                           check_cache,
+                           '<request><support><info></info></support></request>')
+    expirydate = results['SupportInfoResponse']['Support']['ExpiryDate']
 
-    lista = {
+    return [{
         '{#NAME}': 'Support',
         '{#EXPIRES}': int(datetime.strptime(expirydate, '%B %d, %Y').timestamp()),
-        '{#SUPPORTLEVEL}': supportlevel
-    }
-    result_json.append(lista)
-
-    return json.dumps({'data': result_json}, indent=4)
+        '{#SUPPORTLEVEL}': results['SupportInfoResponse']['Support']['SupportLevel']
+    }]
 
 
-# Date expiration licenses operations
-def expirationLicensesOperations(license):
-    lista = discoveryLicensesOperations()
-    d1_json = json.loads(lista)
-    for i in d1_json['data']:
-        if license == i['{#NAME}']:
-            expiration = i['{#EXPIRES}']
-            return expiration
+def load_licenses(url, port, key, check_cache=True):
+    """Loads the license data from a cached file not older than 15minutes or from the PA API"""
+    results = load_from_pa('license',
+                           url,
+                           port,
+                           key,
+                           check_cache,
+                           '<request><license><info></info></license></request>')
+    licenses = []
+    for _license in results['licenses']['entry']:
+        if not _license['expires'] == 'Never':
+            licenses.append({
+                '{#NAME}': _license['feature'],
+                '{#SERIAL}': _license['serial'],
+                '{#ISSUED}': _license['issued'],
+                '{#EXPIRES}': int(datetime.strptime(_license['expires'], '%B %d, %Y').timestamp()),
+                '{#EXPIRED}': _license['expired']
+            })
+
+    return licenses
 
 
-# Date expiration licenses support
-def expirationLicenseSupport(license):
-    lista = discoveryLicenseSupport()
-    d1_json = json.loads(lista)
-    for i in d1_json['data']:
-        if license == i['{#NAME}']:
-            expiration = i['{#EXPIRES}']
-            return expiration
+def resolve_entry(entries, name):
+    """Resolves the entry by name from the list of entries"""
+    for entry in entries:
+        if name == entry['{#NAME}']:
+            return entry['{#EXPIRES}']
+    return None
 
 
-# Script execution with arguments
-if arguments == 'discoveryLicensesOperations':
-    print(discoveryLicensesOperations())
-elif arguments == 'discoveryLicenseSupport':
-    print(discoveryLicenseSupport())
-elif arguments == 'expirationLicensesOperations':
-    license = sys.argv[5]
-    print(expirationLicensesOperations(license))
-elif arguments == 'expirationLicenseSupport':
-    license = sys.argv[5]
-    print(expirationLicenseSupport(license))
+def main():
+    """Runs the license/support check """
+    result = None
+    check_type = sys.argv[4]
+    if check_type in ('discoveryLicensesOperations', 'discover_licenses', 'discover_license'):
+        result = load_licenses(sys.argv[1], sys.argv[2], sys.argv[3], check_cache=False)
+
+    if check_type in ('expirationLicensesOperations', 'license_expiration'):
+        result = resolve_entry(
+            load_licenses(sys.argv[1], sys.argv[2], sys.argv[3]),
+            sys.argv[5]
+        )
+
+    if check_type in ('discoveryLicenseSupport', 'discover_support'):
+        result = load_support(sys.argv[1], sys.argv[2], sys.argv[3], check_cache=False)
+
+    if check_type in ('expirationLicenseSupport', 'support_expiration'):
+        result = resolve_entry(
+            load_support(sys.argv[1], sys.argv[2], sys.argv[3]),
+            sys.argv[5]
+        )
+
+    return result
+
+
+if __name__ == '__main__':
+    try:
+        print(json.dumps(main(), indent=4))
+    except requests.exceptions.ConnectTimeout:
+        print(f"Timeout connecting to {sys.argv[1]}:{sys.argv[2]}")
+        sys.exit(1)
