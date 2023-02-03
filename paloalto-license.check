@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+#
+# Author: Danielle dos Reis
+# Author: David Lundgren
+
+import json
+import platform
+import tempfile
+import sys
+from datetime import datetime
+from pathlib import Path
+from urllib.parse import quote
+
+import requests
+import urllib3
+import xmltodict # pylint: disable=import-error
+
+# Remove warnings
+urllib3.disable_warnings()
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def load_from_pa(name, url, port, key, check_cache, cmd):
+    """Loads the requested data from the cached file or from the PA API if > 15m"""
+    # check the cached file first
+    cache_file = Path("/tmp" if platform.system() == "Darwin" else tempfile.gettempdir()) / f'paloalto-{name}.json'
+    if check_cache:
+        try:
+            with open(cache_file, 'r', encoding='UTF-8') as file:
+                return json.loads(file.read())
+        except OSError:
+            # doesn't exist yet, we'll create it later
+            pass
+
+    response = requests.get(
+        f'https://{url}:{port}/api/?type=op&cmd=show&key={key}&cmd={quote(cmd)}',
+        verify=False,
+        timeout=10
+    )
+
+    result = dict(xmltodict.parse(response.text))['response']['result']
+    with open(cache_file, 'w', encoding='UTF-8') as file:
+        file.write(json.dumps(result))
+
+    return result
+
+
+def load_support(url, port, key, check_cache=True):
+    """Loads the support data"""
+    results = load_from_pa('support',
+                           url,
+                           port,
+                           key,
+                           check_cache,
+                           '<request><support><info></info></support></request>')
+    expirydate = results['SupportInfoResponse']['Support']['ExpiryDate']
+
+    return [{
+        '{#NAME}': 'Support',
+        '{#EXPIRES}': int(datetime.strptime(expirydate, '%B %d, %Y').timestamp()),
+        '{#SUPPORTLEVEL}': results['SupportInfoResponse']['Support']['SupportLevel']
+    }]
+
+
+def load_licenses(url, port, key, check_cache=True):
+    """Loads the license data from a cached file not older than 15minutes or from the PA API"""
+    results = load_from_pa('license',
+                           url,
+                           port,
+                           key,
+                           check_cache,
+                           '<request><license><info></info></license></request>')
+    licenses = []
+    for _license in results['licenses']['entry']:
+        if not _license['expires'] == 'Never':
+            licenses.append({
+                '{#NAME}': _license['feature'],
+                '{#SERIAL}': _license['serial'],
+                '{#ISSUED}': _license['issued'],
+                '{#EXPIRES}': int(datetime.strptime(_license['expires'], '%B %d, %Y').timestamp()),
+                '{#EXPIRED}': _license['expired']
+            })
+
+    return licenses
+
+
+def resolve_entry(entries, name):
+    """Resolves the entry by name from the list of entries"""
+    for entry in entries:
+        if name == entry['{#NAME}']:
+            return entry['{#EXPIRES}']
+    return None
+
+
+def main():
+    """Runs the license/support check """
+    result = None
+    check_type = sys.argv[4]
+    if check_type in ('discoveryLicensesOperations', 'discover_licenses', 'discover_license'):
+        result = load_licenses(sys.argv[1], sys.argv[2], sys.argv[3], check_cache=False)
+
+    if check_type in ('expirationLicensesOperations', 'license_expiration'):
+        result = resolve_entry(
+            load_licenses(sys.argv[1], sys.argv[2], sys.argv[3]),
+            sys.argv[5]
+        )
+
+    if check_type in ('discoveryLicenseSupport', 'discover_support'):
+        result = load_support(sys.argv[1], sys.argv[2], sys.argv[3], check_cache=False)
+
+    if check_type in ('expirationLicenseSupport', 'support_expiration'):
+        result = resolve_entry(
+            load_support(sys.argv[1], sys.argv[2], sys.argv[3]),
+            sys.argv[5]
+        )
+
+    return result
+
+
+if __name__ == '__main__':
+    try:
+        print(json.dumps(main(), indent=4))
+    except requests.exceptions.ConnectTimeout:
+        print(f"Timeout connecting to {sys.argv[1]}:{sys.argv[2]}")
+        sys.exit(1)

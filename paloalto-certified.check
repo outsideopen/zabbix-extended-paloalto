@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+#
+# Author: Danielle dos Reis
+# Author: David Lundgren
+
+import json
+import platform
+import tempfile
+import sys
+from datetime import datetime
+from pathlib import Path
+from urllib.parse import quote
+
+import requests
+import urllib3
+import xmltodict # pylint: disable=import-error
+
+# Remove warnings
+urllib3.disable_warnings()
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def load_certificates(url, port, key, check_cache=True):
+    """Loads the certificates from a cached file not older than 15minutes or from the PA API"""
+    cache_file = Path("/tmp" if platform.system() == "Darwin" else tempfile.gettempdir()) / 'paloalto-certificates.json'
+
+    # check the cached file first
+    if check_cache:
+        try:
+            with open(cache_file, 'r', encoding='UTF-8') as file:
+                return json.loads(file.read())
+        except OSError:
+            # doesn't exist yet, we'll create it later
+            pass
+
+    # URL
+    cmd = quote('<show><sslmgr-store><config-certificate-info></config-certificate-info></sslmgr-store></show>')
+    response = requests.get(
+        f'https://{url}:{port}/api/?type=op&cmd=show&key={key}&cmd={cmd}',
+        verify=False,
+        timeout=10
+    )
+
+
+    results = dict(xmltodict.parse(response.text))['response']['result']
+    results = results.split('\n\n')
+    certificates = []
+
+    for i in results:
+        result = i.split('\n    ')
+        data_fmt = result[6].replace('    db-exp-date: ', '')[14:].replace(' GMT)', '')
+        data = {
+            '{#HASH}': result[3].replace('    issuer-subjecthash: ', ''),
+            '{#ISSUER}': result[2].replace('    issuer: ', ''),
+            '{#DBEXPDATE}': int(datetime.strptime(data_fmt, '%b %d %H:%M:%S %Y').timestamp()),
+            '{#DBSERIAL}': result[8].replace('    db-serialno: ', ''),
+            '{#DBNAME}': result[10].replace('    db-name: ', '')
+        }
+
+        certificates.append(data)
+
+    with open(cache_file, 'w', encoding='UTF-8') as file:
+        file.write(json.dumps(certificates))
+
+    return certificates
+
+
+def resolve_cert(certs, cert_hash, serial=None):
+    """Resolves the certificate based on the hash & serial if provided"""
+    for cert in certs:
+        if cert_hash == cert['{#HASH}'] and (not serial or (serial and serial == cert['#DBSERIAL'])):
+            return cert['{#DBEXPDATE}']
+
+    return f'unknown {cert_hash}'
+
+def main():
+    """Runs the certificates check"""
+    results = None
+    if sys.argv[4] in ('discoveryCertified', 'discover'):
+        results = {'data': load_certificates(sys.argv[1], sys.argv[2], sys.argv[3], check_cache=False)}
+
+    if sys.argv[4] in ('expirationCertified', 'expiration'):
+        results = resolve_cert(
+            load_certificates(sys.argv[1], sys.argv[2], sys.argv[3]),
+            sys.argv[5],
+            sys.argv[6] if 7 == len(sys.argv) else None
+        )
+
+    return results
+
+if __name__ == '__main__':
+    try:
+        print(json.dumps(main(), indent=4))
+    except requests.exceptions.ConnectTimeout:
+        print(f"Timeout connecting to {sys.argv[1]}:{sys.argv[2]}")
+        sys.exit(1)
